@@ -14,7 +14,7 @@ namespace Notification.Wpf.Controls
     [TemplatePart(Name = "PART_CloseButton", Type = typeof(Button))]
     public partial class Notification : ContentControl
     {
-        private TimeSpan _closingAnimationTime = TimeSpan.Zero;
+        protected TimeSpan _closingAnimationTime = TimeSpan.Zero;
 
         public bool IsClosing { get; set; }
 
@@ -79,7 +79,7 @@ namespace Notification.Wpf.Controls
         }
 
         //TODO: .NET40
-        public async void Close()
+        public virtual async void Close()
         {
             if (IsClosing)
             {
@@ -92,15 +92,11 @@ namespace Notification.Wpf.Controls
             await Task.Delay(_closingAnimationTime);
             RaiseEvent(new RoutedEventArgs(NotificationClosedEvent));
 
-            var currentWindow = Application.Current.Windows.OfType<Window>().FirstOrDefault(x => x.Title.Equals("ToastWindow"));
+            var currentWindow = Application.Current.Windows.OfType<NotificationsOverlayWindow>().FirstOrDefault();
             if (currentWindow == null) return;
-            var notificationCount = VisualTreeHelperExtensions.GetActiveNotificationCount(currentWindow);
 
-            if (notificationCount == 0)
+            if (currentWindow.NotificationArea.NotificationsCount == 0)
                 currentWindow.Close();
-
         }
-
-
     }
 }

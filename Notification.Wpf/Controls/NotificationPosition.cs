@@ -1,5 +1,8 @@
-﻿namespace Notification.Wpf.Controls
+﻿using System;
+
+namespace Notification.Wpf.Controls
 {
+    [Serializable]
     public enum NotificationPosition
     {
         TopLeft,

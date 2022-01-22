@@ -1,19 +1,15 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
-
 using Notification.Wpf.Constants;
 using Notification.Wpf.View;
 
-using Notifications.Wpf.ViewModels;
-
 namespace Notification.Wpf.Controls
 {
-    public class NotificationArea : Control
+    public class NotificationArea : Control, IDisposable
     {
         #region CollapseProgressAuto : bool - Progress bar will automatically collapsed if items count more that max items
 
@@ -48,7 +44,7 @@ namespace Notification.Wpf.Controls
                 nameof(Position),
                 typeof(NotificationPosition),
                 typeof(NotificationArea),
-                new PropertyMetadata(NotificationPosition.BottomRight));
+                new PropertyMetadata(NotificationPosition.TopLeft));
 
         /// <summary>Area position on overlay window</summary>
         public NotificationPosition Position
@@ -88,6 +84,10 @@ namespace Notification.Wpf.Controls
         public NotificationArea()
         {
             NotificationManager.AddArea(this);
+            this.Unloaded += (sender, args) =>
+            {
+                NotificationManager.RemoveArea(this);
+            };
         }
 
         static NotificationArea()
@@ -106,75 +106,49 @@ namespace Notification.Wpf.Controls
             : Position is NotificationPosition.BottomCenter or NotificationPosition.BottomLeft or NotificationPosition.BottomRight;
         }
 
-#if NET40
-        public void Show(object content, TimeSpan expirationTime, Action onClick, Action onClose, bool ShowXbtn)
-#else
-        public async void Show(object content, TimeSpan expirationTime, Action onClick, Action onClose, bool CloseOnClick, bool ShowXbtn)
-#endif
+        private readonly Dictionary<string, VolumeNotification> _displayedNotifications = new ();
+        public int NotificationsCount => this._displayedNotifications.Keys.Count;
+        
+        public void ShowNotification(object content, string key, bool displayCloseButton, TimeSpan expirationTime)
         {
-            var notification = new Notification(content, ShowXbtn);
-
-            notification.MouseLeftButtonDown += (sender, _) =>
+            if(this._displayedNotifications.TryGetValue(key, out VolumeNotification ntf))
             {
-                if (content is NotificationContent message)
-                    CloseOnClick = message.CloseOnClick;
-
-                if (CloseOnClick)
-                    (sender as Notification)?.Close();
-
-                if (onClick == null) return;
-                onClick.Invoke();
-                (sender as Notification)?.Close();
-            };
-            notification.NotificationClosed += (_, _) => onClose?.Invoke();
-
-            notification.NotificationClosed += OnNotificationClosed;
-
-
-            await OnShowContent(notification, expirationTime);
-
-        }
-
-        /// <summary>
-        /// Отображает окно прогресса
-        /// </summary>
-        /// <param name="progress">модель прогресс бара</param>
-        /// <param name="ShowXbtn">need to show X close button</param>
-        public async void Show(NotificationProgressViewModel progress, bool ShowXbtn)
-        {
-            var content = new NotificationProgress { DataContext = progress };
-            content.Cancel.Click += progress.CancelProgress;
-
-            var notification = new Notification(content, ShowXbtn);
-            notification.NotificationClosed += progress.CancelProgress;
-            notification.NotificationClosed += OnNotificationClosed;
-            progress.NotifierProgress.SetArea(notification);
-
-            await OnShowContent(notification);
-
-            try
-            {
-                while (progress.NotifierProgress.IsFinished != true)
-                {
-                    progress.Cancel.Token.ThrowIfCancellationRequested();
-                    await Task.Delay(TimeSpan.FromSeconds(1), progress.Cancel.Token);
-                }
+                ntf.ResetDisplayTimer();
+                return;
             }
-            catch (OperationCanceledException)
-            { }
-            if (!notification.IsClosing)
-                notification.Close();
+            
+            var notification = new VolumeNotification(content, key, displayCloseButton, expirationTime);
+            this._displayedNotifications.Add(key, notification);
+            
+            notification.NotificationClosed += OnNotificationClosed;
+
+            ShowNotificationContent(notification, expirationTime);
         }
 
-        /// <summary>
-        /// Добавляет уведомление в список отображения
-        /// </summary>
-        /// <param name="notification">уведомление</param>
-        /// <param name="expirationTime">время отображения</param>
-        /// <returns></returns>
-        private async Task OnShowContent(Notification notification, TimeSpan? expirationTime = null)
+        public void CloseNotification(string key)
         {
+            if(this._displayedNotifications.TryGetValue(key, out var ntf))
+            {
+                ntf.Close();
+            }
+        }
 
+        private void OnNotificationClosed(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                this._items.Remove(sender);
+            });
+            if(sender is VolumeNotification vn)
+            {
+                this._displayedNotifications.Remove(vn.Key);
+                vn.NotificationClosed -= OnNotificationClosed;
+            }
+            
+        }
+
+        private void ShowNotificationContent(VolumeNotification notification, TimeSpan? expirationTime = null)
+        {
             if (!IsLoaded)
                 return;
 
@@ -185,68 +159,21 @@ namespace Notification.Wpf.Controls
             lock (_items)
             {
                 _items.Add(notification);
+                if(expirationTime != TimeSpan.MaxValue)
+                    notification.InvokeDisplayTimer();
 
                 if (_items.OfType<Notification>().Count(i => !i.IsClosing) > MaxItems)
                 {
                     if (_items.OfType<Notification>().Where(i => i.Content is not NotificationProgress).Count(i => !i.IsClosing) > MaxItems)
                         _items.OfType<Notification>().Where(i => i.Content is not NotificationProgress).FirstOrDefault(i => !i.IsClosing)?.Close();
-                    if (CollapseProgressAuto)
-                        foreach (var progress in _items.OfType<Notification>()
-                           .Where(i => i.Content is NotificationProgress { DataContext: NotificationProgressViewModel { Collapse: false } }))
-                        {
-                            var content = (NotificationProgress)progress.Content;
-                            if (content is not null)
-                            {
-                                var model = (NotificationProgressViewModel)content.DataContext;
-                                model.Collapse = true;
-                            }
-                        }
-
-                    //_items.OfType<Notification>().Where(i=>i.DataContext is not NotificationProgress).First(i => !i.IsClosing).Close();
                 }
             }
-
-            if (expirationTime is null)
-                return;
-#if NET40 
-            DelayExecute(expirationTime, () =>
-            {
-#else
-
-            if (expirationTime == TimeSpan.MaxValue)
-            {
-                return;
-            }
-            await Task.Delay((TimeSpan)expirationTime);
-
-#endif
-            notification.Close();
-#if NET40
-            });
-#endif
         }
-        private void OnNotificationClosed(object sender, RoutedEventArgs routedEventArgs)
+
+        public void Dispose()
         {
-            _items.Remove(sender);
+            foreach(var notification in this._displayedNotifications.Values)
+                notification.Close();
         }
-
-#if NET40
-        private static void DelayExecute(TimeSpan delay, Action actionToExecute)
-        {
-            if (actionToExecute != null)
-            {
-                var timer = new DispatcherTimer
-                {
-                    Interval = delay
-                };
-                timer.Tick += (sender, args) =>
-                {
-                    timer.Stop();
-                    actionToExecute();
-                };
-                timer.Start();
-            }
-        }
-#endif
     }
 }

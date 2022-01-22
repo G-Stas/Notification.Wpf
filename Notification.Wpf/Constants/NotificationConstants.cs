@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.ComponentModel;
+using System.Windows;
 using System.Windows.Media;
 using Notification.Wpf.Base;
 using Notification.Wpf.Classes;
@@ -17,20 +18,29 @@ namespace Notification.Wpf.Constants
         public static bool CollapseProgressIfMoreRows { get; set; } = true;
 
         /// <summary> Overlay message position </summary>
-        public static NotificationPosition MessagePosition { get; set; } = NotificationPosition.BottomRight;
+        public static NotificationPosition MessagePosition { get; set; } = NotificationPosition.TopLeft;
 
         /// <summary> Reverse are when absolute </summary>
         public static bool? IsReversedPanel { get; set; }
 
         /// <summary> Default message position when position absolute </summary>
         public static AbsolutePosition AbsolutePosition { get; } = new AbsolutePosition();
+        
+        public static ThemeColors ThemeColors => ThemeColors.Instance;
 
         #region Notification
 
         #region Default colors
 
+        static NotificationConstants() { }
+
+        private static Brush backgroundColor;
+
         /// <summary> base background color </summary>
-        public static Brush DefaultBackgroundColor { get; set; } = (Brush)new BrushConverter().ConvertFrom("#FF444444");
+        public static Brush DefaultBackgroundColor { get; set; }
+        
+        public static Brush ButtonHoverBackgroundColor { get; set; }
+        
         /// <summary> base foreground color </summary>
         public static Brush DefaultForegroundColor { get; set; } = new SolidColorBrush(Colors.WhiteSmoke);
 
