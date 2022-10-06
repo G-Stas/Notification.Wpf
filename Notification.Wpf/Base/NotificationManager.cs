@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -16,6 +17,11 @@ namespace Notification.Wpf
         private static NotificationsOverlayWindow _window;
         private static int _verticalIndent;
         private static int _horizontalIndent;
+        
+        private static double _workAreaLeft = SystemParameters.WorkArea.Left;
+        private static double _workAreaTop = SystemParameters.WorkArea.Top;
+        private static double _workAreaHeight = SystemParameters.PrimaryScreenHeight;
+        private static double _workAreaWidth = SystemParameters.PrimaryScreenHeight;
 
         /// <summary>
         /// Initialize new notification manager
@@ -68,6 +74,11 @@ namespace Notification.Wpf
             }
         }
 
+        public bool IsDisplayed(string key, bool resetDisplayTimer)
+        {
+            return Areas != null && Areas.Any(a => a.IsDisplayed(key, resetDisplayTimer));
+        }
+
         public void ChangeNotificationAreaPosition(NotificationPosition newPosition)
         {
             NotificationConstants.MessagePosition = newPosition;
@@ -100,6 +111,23 @@ namespace Notification.Wpf
             NotificationConstants.NotificationsOverlayWindowMaxCount = count;
         }
 
+        public void SetWorkArea(double left, double top, double width, double height)
+        {
+            _workAreaLeft = left;
+            _workAreaTop = top;
+            _workAreaWidth = width;
+            _workAreaHeight = height;
+
+            if(_window != null)
+            {
+                _window.Width = _workAreaWidth;
+                _window.Height = _workAreaHeight;
+            }
+            
+            UpdateHorizontalIndent();
+            UpdateVerticalIndent();
+        }
+
         private void UpdateHorizontalIndent()
         {
             if(_window != null)
@@ -110,20 +138,20 @@ namespace Notification.Wpf
                     case NotificationPosition.BottomLeft:
                     case NotificationPosition.CenterLeft:
                     {
-                        _window.Left = SystemParameters.WorkArea.Left + _horizontalIndent;
+                        _window.Left = _workAreaLeft + _horizontalIndent;
                         break;
                     }
                     case NotificationPosition.TopRight:
                     case NotificationPosition.BottomRight:
                     case NotificationPosition.CenterRight:
                     {
-                        _window.Left = SystemParameters.WorkArea.Left - _horizontalIndent;
+                        _window.Left = _workAreaLeft - _horizontalIndent;
                         break;
                     }
                     case NotificationPosition.TopCenter:
                     case NotificationPosition.BottomCenter:
                     {
-                        _window.Left = SystemParameters.WorkArea.Left + (SystemParameters.WorkArea.Left / 2);
+                        _window.Left = _workAreaLeft + (_workAreaLeft / 2);
                         break;
                     }
                 }
@@ -140,14 +168,14 @@ namespace Notification.Wpf
                     case NotificationPosition.TopRight:
                     case NotificationPosition.TopCenter:
                     {
-                        _window.Top = SystemParameters.WorkArea.Top + _verticalIndent;
+                        _window.Top = _workAreaTop + _verticalIndent;
                         break;
                     }
                     case NotificationPosition.BottomLeft:
                     case NotificationPosition.BottomRight:
                     case NotificationPosition.BottomCenter:
                     {
-                        _window.Top = SystemParameters.WorkArea.Top - _verticalIndent;
+                        _window.Top = _workAreaTop - _verticalIndent;
                         break;
                     }
                 }
@@ -171,8 +199,8 @@ namespace Notification.Wpf
             {
                 _window = new NotificationsOverlayWindow
                 {
-                    Width = SystemParameters.PrimaryScreenWidth,
-                    Height = SystemParameters.PrimaryScreenHeight,
+                    Width = _workAreaWidth,
+                    Height = _workAreaHeight,
                     CollapseProgressAutoIfMoreMessages = NotificationConstants.CollapseProgressIfMoreRows,
                     MaxWindowItems = NotificationConstants.NotificationsOverlayWindowMaxCount,
                     MessagePosition = NotificationConstants.MessagePosition,

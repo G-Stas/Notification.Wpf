@@ -133,6 +133,17 @@ namespace Notification.Wpf.Controls
             }
         }
 
+        public bool IsDisplayed(string key, bool resetDisplayTimer)
+        {
+            if(this._displayedNotifications.TryGetValue(key, out var ntf))
+            {
+                if(resetDisplayTimer)
+                    ntf.ResetDisplayTimer();
+                return true;
+            }
+            return false;
+        }
+
         private void OnNotificationClosed(object sender, RoutedEventArgs e)
         {
             Application.Current.Dispatcher.Invoke(() =>
